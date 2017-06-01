@@ -3,37 +3,49 @@
  * LICENSE file in the project root for full license information
  */
 
-
-#include <native/task.h>
-#include <native/timer.h>
-
+#include <time.h>
+#include <sys/time.h>
 #include <unistd.h>
+#include <stdlib.h>
+#include <string.h>
 #include <osal.h>
+#include <posix/pthread.h>
 
-typedef SRTIME NANO_TIME;
+#define USECS_PER_SEC     1000000
 
 int osal_usleep (uint32 usec)
 {
-   RTIME ticks = usec * 1000LL;
-   rt_task_sleep( rt_timer_ns2ticks(ticks) );
-   return 0;
+   struct timespec ts;
+   ts.tv_sec = usec / USECS_PER_SEC;
+   ts.tv_nsec = (usec % USECS_PER_SEC) * 1000;
+   /* usleep is depricated, use nanosleep instead */
+   return nanosleep(&ts, NULL);
 }
 
-ec_timet osal_current_time (void)
+int osal_gettimeofday(struct timeval *tv, struct timezone *tz)
 {
-   NANO_TIME current_time;
-   ec_timet return_value;
+   struct timespec ts;
+   int return_value;
 
-   current_time = rt_timer_ticks2ns(rt_timer_read());
-
-   return_value.sec = current_time / 1000000000LL;
-   return_value.usec = (current_time % 1000000000LL) / 1000LL;
+   /* Use clock_gettime to prevent possible live-lock.
+    * Gettimeofday uses CLOCK_REALTIME that can get NTP timeadjust.
+    * If this function preempts timeadjust and it uses vpage it live-locks.
+    * Also when using XENOMAI, only clock_gettime is RT safe */
+   return_value = clock_gettime(CLOCK_MONOTONIC, &ts), 0;
+   tv->tv_sec = ts.tv_sec;
+   tv->tv_usec = ts.tv_nsec / 1000;
    return return_value;
 }
 
-uint64_t osal_current_time_ns (void)
+ec_timet osal_current_time(void)
 {
-   return rt_timer_ticks2ns(rt_timer_read());
+   struct timeval current_time;
+   ec_timet return_value;
+
+   osal_gettimeofday(&current_time, 0);
+   return_value.sec = current_time.tv_sec;
+   return_value.usec = current_time.tv_usec;
+   return return_value;
 }
 
 void osal_time_diff(ec_timet *start, ec_timet *end, ec_timet *diff)
@@ -48,41 +60,98 @@ void osal_time_diff(ec_timet *start, ec_timet *end, ec_timet *diff)
    }
 }
 
-void osal_timer_start (osal_timert * self, uint32 timeout_usec)
+void osal_timer_start(osal_timert * self, uint32 timeout_usec)
 {
-   NANO_TIME start_time;
-   NANO_TIME stop_time;
+   struct timeval start_time;
+   struct timeval timeout;
+   struct timeval stop_time;
 
-   start_time = rt_timer_ticks2ns(rt_timer_read());
-   stop_time = start_time + (timeout_usec * 1000LL);
+   osal_gettimeofday(&start_time, 0);
+   timeout.tv_sec = timeout_usec / USECS_PER_SEC;
+   timeout.tv_usec = timeout_usec % USECS_PER_SEC;
+   timeradd(&start_time, &timeout, &stop_time);
 
-   self->stop_time.sec = stop_time / 1000000000LL;
-   self->stop_time.usec = (stop_time % 1000000000LL) / 1000LL;
+   self->stop_time.sec = stop_time.tv_sec;
+   self->stop_time.usec = stop_time.tv_usec;
 }
 
 boolean osal_timer_is_expired (osal_timert * self)
 {
-   NANO_TIME current_time;
-   NANO_TIME stop_time;
+   struct timeval current_time;
+   struct timeval stop_time;
+   int is_not_yet_expired;
 
-   current_time = rt_timer_ticks2ns(rt_timer_read());
-   stop_time = self->stop_time.sec * 1000000000LL + self->stop_time.usec * 1000LL;
+   osal_gettimeofday(&current_time, 0);
+   stop_time.tv_sec = self->stop_time.sec;
+   stop_time.tv_usec = self->stop_time.usec;
+   is_not_yet_expired = timercmp(&current_time, &stop_time, <);
 
-   return (current_time >= stop_time);
+   return is_not_yet_expired == FALSE;
 }
 
+void *osal_malloc(size_t size)
+{
+   return malloc(size);
+}
+
+void osal_free(void *ptr)
+{
+   free(ptr);
+}
 
 int osal_thread_create(void *thandle, int stacksize, void *func, void *param)
 {
-    return 0;
-}
+   int                  ret;
+   pthread_attr_t       attr;
+   pthread_t            *threadp;
+   struct sched_param   schparam;
 
+   threadp = thandle;
+   pthread_attr_init(&attr);
+   pthread_attr_setstacksize(&attr, stacksize);
+   ret = pthread_create(threadp, &attr, func, param);
+   if(ret < 0)
+   {
+      return 0;
+   }
+
+   memset(&schparam, 0, sizeof(schparam));
+   schparam.sched_priority = 40;
+   ret = pthread_setschedparam(*threadp, SCHED_FIFO, &schparam);
+   if(ret < 0)
+   {
+      return 0;
+   }
+   
+   return 1;
+}
 
 int osal_thread_create_rt(void *thandle, int stacksize, void *func, void *param)
 {
-    return 0;
+#if 0
+   int                  ret;
+   pthread_attr_t       attr;
+   struct sched_param   schparam;
+   pthread_t            *threadp;
+
+   threadp = thandle;
+   pthread_attr_init(&attr);
+   pthread_attr_setstacksize(&attr, stacksize);
+   ret = pthread_create(threadp, &attr, func, param);
+   pthread_attr_destroy(&attr);
+   if(ret < 0)
+   {
+      return 0;
+   }
+   memset(&schparam, 0, sizeof(schparam));
+   schparam.sched_priority = 40;
+   schparam.
+   ret = pthread_setschedparam(*threadp, SCHED_FIFO, &schparam);
+   if(ret < 0)
+   {
+      return 0;
+   }
+#endif
+
+   return 1;
 }
-
-
-
-

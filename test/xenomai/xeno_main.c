@@ -37,6 +37,8 @@
 #include <net/ethernet.h>
 #include <net/if.h>
 #include <arpa/inet.h>
+#include "ethercat.h"
+
 
 char buffer[1514];
 int sock;
@@ -44,9 +46,9 @@ int sock;
 
 void catch_signal(int sig)
 {
-    close(sock);
+    printf("signal catched");
+    close(ecx_context.port->sockhandle);
 }
-
 
 int main(int argc, char *argv[])
 {
@@ -56,6 +58,14 @@ int main(int argc, char *argv[])
     struct ifreq ifr;
     struct timespec delay = { 1, 0 };
     struct ether_header *eth = (struct ether_header *)buffer;
+    pthread_attr_t       attr;
+    int stacksize = 1024;
+
+    printf("sock handle = %d\n", ecx_context.port->sockhandle);
+
+#if defined(__KERNEL__) || defined(__XENO_SIM__)
+    printf("test some defined ");
+#endif
 
 
     signal(SIGTERM, catch_signal);
@@ -63,37 +73,13 @@ int main(int argc, char *argv[])
     signal(SIGHUP, catch_signal);
     mlockall(MCL_CURRENT|MCL_FUTURE);
 
-    if (argc < 2) {
-        printf("usage: %s <interface>\n", argv[0]);
-        return 0;
-    }
-
-    if ((sock = socket(PF_PACKET, SOCK_RAW, htons(0x1234))) < 0) {
-        perror("socket cannot be created");
-        return 1;
-    }
-
-    strncpy(ifr.ifr_name, argv[1], IFNAMSIZ);
-    if (ioctl(sock, SIOCGIFINDEX, &ifr) < 0) {
-        perror("cannot get interface index");
-        close(sock);
-        return 1;
-    }
-
-    addr.sll_family   = AF_PACKET;
-    addr.sll_protocol = htons(0x1234);
-    addr.sll_ifindex  = ifr.ifr_ifindex;
-
-    if (bind(sock, (struct sockaddr *)&addr, sizeof(addr)) < 0) {
-        perror("cannot bind to local ip/port");
-        close(sock);
-        return 1;
-    }
-
-    memset(eth->ether_dhost, 0xFF, ETH_HLEN);
-    eth->ether_type = htons(0x1234);
+    ec_init("rteth0");
 
     pthread_setschedparam(pthread_self(), SCHED_FIFO, &param);
+
+    pthread_attr_init(&attr);
+    pthread_attr_setstacksize(&attr, stacksize);
+    // pthread_attr_setdetachstate(&thattr, PTHREAD_CREATE_JOINABLE);
 
     while (1) {
         buffer[0] = 0xFF; buffer[1] = 0xFF; buffer[2] = 0xFF;
@@ -105,7 +91,7 @@ int main(int argc, char *argv[])
         buffer[14] = 0x11; buffer[15] = 0x22; buffer[42] = 0x48;
 
         // len = send(sock, buffer, sizeof(buffer), 0);
-        len = send(sock, buffer, 30, 0);
+        len = send(ecx_context.port->sockhandle, buffer, 30, 0);
         if (len < 0)
             break;
 
@@ -117,11 +103,7 @@ int main(int argc, char *argv[])
     /* This call also leaves primary mode, required for socket cleanup. */
     printf("shutting down\n");
 
-    /* Note: The following loop is no longer required since Xenomai 2.4. */
-    while ((close(sock) < 0) && (errno == EAGAIN)) {
-        printf("socket busy - waiting...\n");
-        sleep(1);
-    }
+    close(ecx_context.port->sockhandle);
 
     return 0;
 }
