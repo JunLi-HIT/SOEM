@@ -1771,7 +1771,6 @@ int ecx_send_processdata_group(ecx_contextt *context, uint8 group)
       /* LRW can be used */
       else
       {
-         printf("LRW used\n");
          if (context->grouplist[group].Obytes)
          {
             data = context->grouplist[group].outputs;
@@ -1799,7 +1798,6 @@ int ecx_send_processdata_group(ecx_contextt *context, uint8 group)
                first = FALSE;
             }
             /* send frame */
-            printf("send frame\n");
             ecx_outframe_red(context->port, idx);
             /* push index and data pointer on stack */
             ecx_pushindex(context, idx, data, sublength);
