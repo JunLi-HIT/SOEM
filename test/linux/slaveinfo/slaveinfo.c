@@ -518,6 +518,9 @@ void slaveinfo(char *ifname)
    if (ec_init(ifname))
    {
       printf("ec_init on %s succeeded.\n",ifname);
+
+      ec_group[0].blockLRW = 1;
+      
       /* find and auto-config slaves */
       if ( ec_config(FALSE, &IOmap) > 0 )
       {
