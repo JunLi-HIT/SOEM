@@ -3,9 +3,9 @@
  * LICENSE file in the project root for full license information
  */
 
-/** \file 
+/** \file
  * \brief
- * Headerfile for oshw.h
+ * Headerfile for oshw.c
  */
 
 #ifndef _oshw_

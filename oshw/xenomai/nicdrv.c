@@ -43,7 +43,6 @@
 #include <string.h>
 #include <netpacket/packet.h>
 #include <pthread.h>
-
 #include <rtnet.h>
 
 #include "oshw.h"
@@ -146,9 +145,7 @@ int ecx_setupnic(ecx_portt *port, const char *ifname, int secondary)
 
    timeout.tv_sec =  0;
    timeout.tv_usec = 1;
-#if __XENO__
    r = ioctl(*psock, RTNET_RTIOC_TIMEOUT, &timeout);
-#endif
    
    r = setsockopt(*psock, SOL_SOCKET, SO_RCVTIMEO, &timeout, sizeof(timeout));
    r = setsockopt(*psock, SOL_SOCKET, SO_SNDTIMEO, &timeout, sizeof(timeout));
@@ -157,10 +154,6 @@ int ecx_setupnic(ecx_portt *port, const char *ifname, int secondary)
    /* connect socket to NIC by name */
    strcpy(ifr.ifr_name, ifname);
    r = ioctl(*psock, SIOCGIFINDEX, &ifr);
-   if (r < 0) {
-       printf("Failed to get socket index: %s\n", strerror(-r));
-   }
-
    ifindex = ifr.ifr_ifindex;
    strcpy(ifr.ifr_name, ifname);
    ifr.ifr_flags = 0;
@@ -169,20 +162,11 @@ int ecx_setupnic(ecx_portt *port, const char *ifname, int secondary)
    /* set flags of NIC interface, here promiscuous and broadcast */
    ifr.ifr_flags = ifr.ifr_flags | IFF_PROMISC | IFF_BROADCAST;
    r = ioctl(*psock, SIOCGIFFLAGS, &ifr);
-
-   if (r  < 0) {
-       printf("Failed to set socket flags: %s\n", strerror(-r));
-   }
-
    /* bind socket to protocol, in this case RAW EtherCAT */
    sll.sll_family = AF_PACKET;
    sll.sll_ifindex = ifindex;
    sll.sll_protocol = htons(ETH_P_ECAT);
    r = bind(*psock, (struct sockaddr *)&sll, sizeof(sll));
-   if (r<0) {
-       printf("Failed to bind socket: %s\n", strerror(-r));
-   }
-
    /* setup ethernet headers in tx buffers so we don't have to repeat it */
    for (i = 0; i < EC_MAXBUF; i++)
    {

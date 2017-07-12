@@ -128,30 +128,5 @@ int osal_thread_create(void *thandle, int stacksize, void *func, void *param)
 
 int osal_thread_create_rt(void *thandle, int stacksize, void *func, void *param)
 {
-#if 0
-   int                  ret;
-   pthread_attr_t       attr;
-   struct sched_param   schparam;
-   pthread_t            *threadp;
-
-   threadp = thandle;
-   pthread_attr_init(&attr);
-   pthread_attr_setstacksize(&attr, stacksize);
-   ret = pthread_create(threadp, &attr, func, param);
-   pthread_attr_destroy(&attr);
-   if(ret < 0)
-   {
-      return 0;
-   }
-   memset(&schparam, 0, sizeof(schparam));
-   schparam.sched_priority = 40;
-   schparam.
-   ret = pthread_setschedparam(*threadp, SCHED_FIFO, &schparam);
-   if(ret < 0)
-   {
-      return 0;
-   }
-#endif
-
-   return 1;
+   return osal_thread_create(thandle, stacksize, func, param);
 }

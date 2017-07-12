@@ -12,7 +12,6 @@ set(SOEM_INCLUDE_INSTALL_DIR include/soem)
 message("CMAKE_SYSTEM_NAME is ${CMAKE_SYSTEM_NAME}")
 
 find_package(Xenomai)
-
 if(Xenomai_FOUND)
    set(OS "xenomai")
    # RTNet
@@ -47,7 +46,7 @@ include_directories(osal)
 include_directories(osal/${OS})
 include_directories(oshw/${OS})
 
-if (MSVC)
+if(MSVC)
   set(CMAKE_C_FLAGS_RELEASE "/D _CRT_SECURE_NO_WARNINGS /EHsc")
   set(CMAKE_C_FLAGS_DEBUG "/D _CRT_SECURE_NO_WARNINGS /EHsc /ZI /Od")
 endif()
@@ -68,11 +67,9 @@ if(${CMAKE_SYSTEM_NAME} MATCHES "rt-kernel")
   file(GLOB OSHW_ARCHSOURCES oshw/${OS}/${ARCH}/*.c)
 endif()
 
-# add_library(soem STATIC ${SOEM_SOURCES} ${OSAL_SOURCES} ${OSAL_HEADERS} ${OSHW_SOURCES} ${OSHW_ARCHSOURCES})
 add_library(soem STATIC ${SOEM_SOURCES} ${OSAL_SOURCES} ${OSAL_HEADERS} ${OSHW_SOURCES} ${OSHW_ARCHSOURCES})
 if(Xenomai_FOUND)
   target_link_libraries(soem ${Xenomai_POSIX_LIBRARIES})
-  message("in xenomai_found no target_link_lib")
 elseif(WIN32)
   target_link_libraries(soem wpcap.lib Packet.lib Ws2_32.lib Winmm.lib ${HDF5_LIBRARIES})
 elseif(UNIX)
@@ -85,7 +82,4 @@ install(FILES ${SOEM_HEADERS} ${OSAL_HEADERS} ${OSHW_HEADERS} DESTINATION ${SOEM
 add_subdirectory(test/linux/slaveinfo)
 add_subdirectory(test/linux/eepromtool)
 add_subdirectory(test/linux/simple_test)
-if(Xenomai_FOUND)
-  add_subdirectory(test/xenomai)
-endif(Xenomai_FOUND)
 
